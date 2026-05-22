@@ -1,0 +1,28 @@
+# Python stuff
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+.env
+dj/
+
+# Database
+db.sqlite3
+db.sqlite3-journal
+
+# Media/Static files (Let these be handled by your production storage)
+bella/media/
+*.mp4
+*.png
+*.jpg
+*.pdf
+
+staticfiles/
+
+# IDE/Editor settings
+.vscode/
+.idea/
+.DS_Store

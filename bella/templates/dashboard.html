@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row">
+    <!-- Post Creator Sidebar -->
+    <div class="col-lg-4 mb-4">
+        <div class="card p-4 card-custom bg-white sticky-top" style="top: 20px; z-index: 10;">
+            <h4 class="fw-bold mb-3">Create New Post</h4>
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <button type="submit" class="btn btn-danger w-100 rounded-pill mt-2">Publish Post</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Feed Section -->
+    <div class="col-lg-8">
+        {% for post in posts %}
+            <div class="card card-custom bg-white mb-4 overflow-hidden">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h6 class="mb-0 fw-bold">@{{ post.user.username }}</h6>
+                            <small class="text-muted">{{ post.created_at|timesince }} ago</small>
+                        </div>
+                        <!-- Delete rule check -->
+                        {% if post.user == request.user %}
+                            <a href="{% url 'delete_post' post.id %}" class="btn btn-light btn-sm text-danger rounded-circle" title="Delete Post">
+                                <i class="bi bi-trash3-fill"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+
+                    <h5 class="fw-bold mb-2">{{ post.title }}</h5>
+                    {% if post.content %}
+                        <p class="text-secondary mb-3">{{ post.content }}</p>
+                    {% endif %}
+
+                    <!-- Media Handling -->
+                   {% if post.media_file %}
+                        <div class="rounded-3 overflow-hidden mb-3 bg-light text-center">
+                            {% if post.post_type == 'picture' %}
+                                <img src="{{ post.media_file.url }}" class="img-fluid w-100" style="max-height: 500px; object-fit: cover;" alt="BellaPic">
+                            {% elif post.post_type == 'video' %}
+                                <video controls class="w-100" style="max-height: 500px;">
+                                    <source src="{{ post.media_file.url }}" type="video/mp4">
+                                </video>
+                            {% endif %}
+                        </div>
+			{% endif %}
+
+                    <!-- Real-Time Interactive Footer -->
+                    <div class="d-flex gap-3 border-top border-bottom py-2 my-3">
+                        <button onclick="likePost({{ post.id }}, this)" class="btn btn-link p-0 text-decoration-none {% if request.user in post.likes.all %}text-danger{% else %}text-muted{% endif %}">
+                            <i class="bi bi-heart-fill me-1"></i> <span class="like-count">{{ post.total_likes }}</span> Likes
+                        </button>
+                        <span class="text-muted"><i class="bi bi-chat-left-text-fill me-1"></i> {{ post.comments.count }} Comments</span>
+                    </div>
+
+                    <!-- Dynamic Comments Wrapper -->
+                    <div class="comments-section" id="comments-container-{{ post.id }}">
+                        {% for comment in post.comments.all %}
+                            <div class="bg-light p-2 rounded mb-2 shadow-sm small">
+                                <strong>@{{ comment.user.username }}:</strong> {{ comment.text }}
+                                
+                                <!-- Nested Replies Grid -->
+                                <div class="ms-4 my-2 border-start ps-2 text-muted" id="replies-container-{{ comment.id }}">
+                                    {% for reply in comment.replies.all %}
+                                        <div class="mb-1"><strong>@{{ reply.user.username }}:</strong> {{ reply.text }}</div>
+                                    {% endfor %}
+                                </div>
+
+                                <!-- Dynamic Reply Interface -->
+                                <div class="input-group input-group-sm mt-1 ms-4 w-75">
+                                    <input type="text" class="form-control" placeholder="Reply..." id="reply-input-{{ comment.id }}">
+                                    <button class="btn btn-outline-secondary" onclick="submitReply({{ comment.id }})">Reply</button>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Dynamic Master Comment Form -->
+                    <div class="input-group mt-3">
+                        <input type="text" class="form-control rounded-start-pill" placeholder="Write a comment..." id="comment-input-{{ post.id }}">
+                        <button class="btn btn-danger rounded-end-pill px-4" onclick="submitComment({{ post.id }})">Post</button>
+                    </div>
+
+                </div>
+            </div>
+        {% empty %}
+            <div class="text-center py-5 card-custom bg-white">
+                <i class="bi bi-images display-1 text-muted"></i>
+                <p class="mt-3 text-muted">No uploads available yet. Be the first to publish content!</p>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Async Engine Script -->
+<script>
+function getCSRFToken() {
+    return '{{ csrf_token }}';
+}
+
+function likePost(postId, buttonElement) {
+    fetch(`/post/like/${postId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCSRFToken() }
+    })
+    .then(res => res.json())
+    .then(data => {
+        buttonElement.querySelector('.like-count').innerText = data.total_likes;
+        if (data.liked) {
+            buttonElement.classList.remove('text-muted');
+            buttonElement.classList.add('text-danger');
+        } else {
+            buttonElement.classList.remove('text-danger');
+            buttonElement.classList.add('text-muted');
+        }
+    });
+}
+
+function submitComment(postId) {
+    const input = document.getElementById(`comment-input-${postId}`);
+    const text = input.value.trim();
+    if (!text) return;
+
+    let formData = new FormData();
+    formData.append('text', text);
+
+    fetch(`/post/comment/${postId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const container = document.getElementById(`comments-container-${postId}`);
+            const commentHtml = `
+                <div class="bg-light p-2 rounded mb-2 shadow-sm small">
+                    <strong>@${data.user}:</strong> ${data.text}
+                    <div class="ms-4 my-2 border-start ps-2 text-muted" id="replies-container-${data.comment_id}"></div>
+                    <div class="input-group input-group-sm mt-1 ms-4 w-75">
+                        <input type="text" class="form-control" placeholder="Reply..." id="reply-input-${data.comment_id}">
+                        <button class="btn btn-outline-secondary" onclick="submitReply(${data.comment_id})">Reply</button>
+                    </div>
+                </div>`;
+            container.insertAdjacentHTML('beforeend', commentHtml);
+            input.value = '';
+        }
+    });
+}
+
+function submitReply(commentId) {
+    const input = document.getElementById(`reply-input-${commentId}`);
+    const text = input.value.trim();
+    if (!text) return;
+
+    let formData = new FormData();
+    formData.append('text', text);
+
+    fetch(`/comment/reply/${commentId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const container = document.getElementById(`replies-container-${commentId}`);
+            const replyHtml = `<div class="mb-1"><strong>@${data.user}:</strong> ${data.text}</div>`;
+            container.insertAdjacentHTML('beforeend', replyHtml);
+            input.value = '';
+        }
+    });
+}
+</script>
+{% endblock %}
