@@ -42,6 +42,10 @@ DEBUG = os.getenv('DEBUG') == 'True'
 
 ALLOWED_HOSTS = ['*', '.railway.app']
 
+# ADD THIS LINE TO FIX THE CSRF ERROR:
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.railway.app',
+]
 
 # Application definition
 
